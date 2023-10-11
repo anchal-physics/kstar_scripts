@@ -9,13 +9,13 @@ import yaml
 
 
 """
-read_mdsplus_channel(shot_numbers=31779, tree_names='KSTAR',
+read_mdsplus_channel(shot_numbers=31779, trees='KSTAR',
                      point_names='EP53:FOO', server='203.230.126.231:8005',
                      resample=None, verbose=False)
 
 Mostly copied from connection_test.py by D. Eldon
 """
-def read_mdsplus_channel(shot_numbers=31779, tree_names='KSTAR',
+def read_mdsplus_channel(shot_numbers=31779, trees='KSTAR',
                          point_names='EP53:FOO', server='203.230.126.231:8005',
                          resample=None, verbose=False, config=None):
     if config is not None:
@@ -23,8 +23,8 @@ def read_mdsplus_channel(shot_numbers=31779, tree_names='KSTAR',
             config = yaml.safe_load(f)
         if 'shot_numbers' in config:
             shot_numbers = config['shot_numbers']
-        if 'tree_names' in config:
-            tree_names = config['tree_names']
+        if 'trees' in config:
+            trees = config['trees']
         if 'point_names' in config:
             point_names = config['point_names']
         if 'server' in config:
@@ -39,22 +39,22 @@ def read_mdsplus_channel(shot_numbers=31779, tree_names='KSTAR',
         point_names = [point_names]
     if isinstance(point_names, Iterable):
         point_names = [add_slash(pn) for pn in point_names]
-    if isinstance(tree_names, str):
-        tree_dict = {tree_names: point_names}
-        # tree_names = [tree_names] * len(point_names)
-    elif isinstance(tree_names, list):
-        if len(tree_names) != len(point_names):
-            raise ValueError('tree_names and point_names must be the same length')
-        tree_dict = {tree: [] for tree in tree_names}
-        for tree, pn in zip(tree_names, point_names):
+    if isinstance(trees, str):
+        tree_dict = {trees: point_names}
+        # trees = [trees] * len(point_names)
+    elif isinstance(trees, list):
+        if len(trees) != len(point_names):
+            raise ValueError('trees and point_names must be the same length')
+        tree_dict = {tree: [] for tree in trees}
+        for tree, pn in zip(trees, point_names):
             tree_dict[tree].append(pn)
-    elif isinstance(tree_names, dict):
-        tree_dict = {tree: [] for tree in tree_names}
-        for tree in tree_names:
-            if isinstance(tree_names[tree], str):
-                tree_dict[tree] = [add_slash(tree_names[tree])]
+    elif isinstance(trees, dict):
+        tree_dict = {tree: [] for tree in trees}
+        for tree in trees:
+            if isinstance(trees[tree], str):
+                tree_dict[tree] = [add_slash(trees[tree])]
             else:
-                tree_dict[tree] = [add_slash(pn) for pn in tree_names[tree]]    
+                tree_dict[tree] = [add_slash(pn) for pn in trees[tree]]    
     
     try:
         conn = MDSplus.Connection(server)
@@ -65,7 +65,7 @@ def read_mdsplus_channel(shot_numbers=31779, tree_names='KSTAR',
         return None
     data_dict = {}
     for sn in shot_numbers:
-        data_dict[sn] = {tree: {} for tree in tree_names}
+        data_dict[sn] = {tree: {} for tree in tree_dict}
         for tree in tree_dict:
             try:
                 if verbose:
@@ -119,7 +119,7 @@ def units_of(pn):
 def get_args():
     parser = argparse.ArgumentParser(description='Read MDSplus channel')
     parser.add_argument('-n', '--shot_numbers', type=int, help='Shot number(s)')
-    parser.add_argument('-t', '--tree_names', nargs='+', help='Tree name(s)')
+    parser.add_argument('-t', '--trees', nargs='+', help='Tree name(s)')
     parser.add_argument('-p', '--point_names', nargs='+', help='Point name(s)')
     parser.add_argument('-s', '--server', default='203.230.126.231:8005',
                         help='Server address. Default is 203.230.126.231:8005')
@@ -134,7 +134,7 @@ def get_args():
     parser.add_argument('-v', '--verbose', action='store_true',
                         help='Print verbose messages')
     parser.add_argument('-c', '--config', default=None, type=str,
-                        help='Configuration file containing shot_numbers, tree_names, '
+                        help='Configuration file containing shot_numbers, trees, '
                              'point_names, and server. If provided, these arguments '
                              'are ignored.')
     args = parser.parse_args()
@@ -144,7 +144,7 @@ def get_args():
 if __name__ == '__main__':
     args = get_args()
     data_dict = read_mdsplus_channel(shot_numbers=args.shot_numbers,
-                                     tree_names=args.tree_names,
+                                     trees=args.trees,
                                      point_names=args.point_names,
                                      server=args.server,
                                      resample=args.resample,

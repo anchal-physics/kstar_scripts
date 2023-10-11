@@ -1,6 +1,10 @@
 shot_numbers: 31779
 trees: KSTAR
-point_names: EP53:FOO # Note that \ is not required.
+point_names:
+  - EP53:FOO # Note that \ is not required.
+  - EP54:FOO
+  - EP47:FOO
+  - EP57:FOO
 host: iris.gat.com
 resample: [-0.1, 20, 0.1]
 out_filename: test.h5

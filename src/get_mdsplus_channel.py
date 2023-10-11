@@ -2,6 +2,7 @@ import os
 import tempfile
 import argparse
 import yaml
+import h5py
 
 
 def execute_file_remotely(host, exec_file_path, additional_files=[], return_files=[],
@@ -22,7 +23,7 @@ def execute_file_remotely(host, exec_file_path, additional_files=[], return_file
     os.system(f"ssh {host} 'rm -rf temp_dir'")
 
 
-def get_mdsplus_channel(shot_numbers=31779, tree_names='KSTAR',
+def get_mdsplus_channel(shot_numbers=31779, trees='KSTAR',
                         point_names='EP53:FOO', out_filename='MDSplus_data.h5',
                         server='203.230.126.231:8005', host='iris', resample=None,
                         verbose=False, config=None):
@@ -30,12 +31,12 @@ def get_mdsplus_channel(shot_numbers=31779, tree_names='KSTAR',
     if config is None:
         if isinstance(shot_numbers, int):
             shot_numbers = [shot_numbers]
-        if isinstance(tree_names, str):
-            tree_names = [tree_names]
+        if isinstance(trees, str):
+            trees = [trees]
         if isinstance(point_names, str):
             point_names = [point_names]
         sn = ' '.join([str(shot_number) for shot_number in shot_numbers])
-        tn = ' '.join(tree_names)
+        tn = ' '.join(trees)
         nn = ' '.join(point_names)
         if resample is None:
             rs = ''
@@ -51,12 +52,12 @@ def get_mdsplus_channel(shot_numbers=31779, tree_names='KSTAR',
             vs = ''
 
         # Create a temporary file to execute remotely
-        with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
-            f.write(f"#!/bin/bash \n"
-                    + f"module load python/3 \n"
-                    + f"python3 read_mdsplus_channel.py "
-                    + f"-n {sn} -t {tn} -p {nn} -s {server} "
-                    + f"{rs} -o {out_filename} {vs}")
+        with tempfile.NamedTemporaryFile(mode="w", delete=False) as tmp_f:
+            tmp_f.write(f"#!/bin/bash \n"
+                        + f"module load python/3 \n"
+                        + f"python3 read_mdsplus_channel.py "
+                        + f"-n {sn} -t {tn} -p {nn} -s {server} "
+                        + f"{rs} -o {out_filename} {vs}")
     else:
         with open(config, 'r') as f:
             config_dict = yaml.safe_load(f)
@@ -73,26 +74,52 @@ def get_mdsplus_channel(shot_numbers=31779, tree_names='KSTAR',
             vs = ''
 
         # Create a temporary file to execute remotely
-        with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
-            f.write(f"#!/bin/bash \n"
-                    + f"module load python/3 \n"
-                    + f"python3 read_mdsplus_channel.py -c {config} "
-                    + f"-o {out_filename} {vs}")
+        with tempfile.NamedTemporaryFile(mode="w", delete=False) as tmp_f:
+            tmp_f.write(f"#!/bin/bash \n"
+                        + f"module load python/3 \n"
+                        + f"python3 read_mdsplus_channel.py -c {config} "
+                        + f"-o {out_filename} {vs}")
         add_files.append(config)
+    
+    require_merge = False
+    if os.path.exists(out_filename):
+        if verbose:
+            print(f"File {out_filename} already exists. Will merge with new data.")
+        require_merge = True
+        os.rename(out_filename, out_filename+'.old')
 
     # Execute the temporary file remotely
-    execute_file_remotely(host, f.name, additional_files=add_files,
+    execute_file_remotely(host, tmp_f.name, additional_files=add_files,
                           return_files=[out_filename], verbose=verbose)
+    
+    if require_merge:
+        if verbose:
+            print(f"Merging {out_filename} with {out_filename+'.old'}")
+        with h5py.File(out_filename, 'a') as f:
+            with h5py.File(out_filename+'.old', 'r') as f_old:
+                for sn in f_old:
+                    if sn in f:
+                        for tree in f_old[sn]:
+                            if tree in f[sn]:
+                                for pn in f_old[sn][tree]:
+                                    if pn not in f[sn][tree]:
+                                        f[sn][tree][pn] = f_old[sn][tree][pn]
+                            else:
+                                f[sn][tree] = f_old[sn][tree]
+                    else:
+                        f[sn] = f_old[sn]
+        os.remove(out_filename+'.old')
+
 
     # Delete the temporary file
-    os.remove(f.name)
+    os.remove(tmp_f.name)
 
 
 def get_args():
     parser = argparse.ArgumentParser(description='Read MDSplus channel through SSH')
     parser.add_argument('-n', '--shot_numbers', type=int, nargs='+',
                         help='Shot number(s)')
-    parser.add_argument('-t', '--tree_names', nargs='+', help='Tree name(s)')
+    parser.add_argument('-t', '--trees', nargs='+', help='Tree name(s)')
     parser.add_argument('-p', '--point_names', nargs='+', help='Point name(s)')
     parser.add_argument('-s', '--server', default='203.230.126.231:8005',
                         help='Server address. Default if KSTAR open server '
@@ -118,7 +145,7 @@ def get_args():
 
 if __name__ == '__main__':
     args = get_args()
-    get_mdsplus_channel(args.shot_numbers, args.tree_names, args.point_names,
+    get_mdsplus_channel(args.shot_numbers, args.trees, args.point_names,
                         out_filename=args.out_filename, server=args.server,
                         host=args.host, resample=args.resample, verbose=args.verbose,
                         config=args.config)
