@@ -1,0 +1,7 @@
+shot_numbers: 31779
+tree_names: KSTAR
+point_names: EP53:FOO # Note that \ is not required.
+host: iris
+resample: [-0.1, 20, 0.1]
+out_filename: test.h5
+server: 203.230.126.231:8005
