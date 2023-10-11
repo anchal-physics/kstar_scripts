@@ -17,16 +17,44 @@ Mostly copied from connection_test.py by D. Eldon
 """
 def read_mdsplus_channel(shot_numbers=31779, tree_names='KSTAR',
                          point_names='EP53:FOO', server='203.230.126.231:8005',
-                         resample=None, verbose=False):
+                         resample=None, verbose=False, config=None):
+    if config is not None:
+        with open(config, 'r') as f:
+            config = yaml.safe_load(f)
+        if 'shot_numbers' in config:
+            shot_numbers = config['shot_numbers']
+        if 'tree_names' in config:
+            tree_names = config['tree_names']
+        if 'point_names' in config:
+            point_names = config['point_names']
+        if 'server' in config:
+            server = config['server']
+        if 'resample' in config:
+            resample = config['resample']
+        if 'verbose' in config:
+            verbose = config['verbose']
     if isinstance(shot_numbers, int):
         shot_numbers = [shot_numbers]
     if isinstance(point_names, str):
         point_names = [point_names]
-    point_names = [add_slash(pn) for pn in point_names]
+    if isinstance(point_names, Iterable):
+        point_names = [add_slash(pn) for pn in point_names]
     if isinstance(tree_names, str):
-        tree_names = [tree_names] * len(point_names)
-    elif len(tree_names) != len(point_names):
-        raise ValueError('tree_names and point_names must be the same length')
+        tree_dict = {tree_names: point_names}
+        # tree_names = [tree_names] * len(point_names)
+    elif isinstance(tree_names, list):
+        if len(tree_names) != len(point_names):
+            raise ValueError('tree_names and point_names must be the same length')
+        tree_dict = {tree: [] for tree in tree_names}
+        for tree, pn in zip(tree_names, point_names):
+            tree_dict[tree].append(pn)
+    elif isinstance(tree_names, dict):
+        tree_dict = {tree: [] for tree in tree_names}
+        for tree in tree_names:
+            if isinstance(tree_names[tree], str):
+                tree_dict[tree] = [add_slash(tree_names[tree])]
+            else:
+                tree_dict[tree] = [add_slash(pn) for pn in tree_names[tree]]    
     
     try:
         conn = MDSplus.Connection(server)
@@ -38,7 +66,7 @@ def read_mdsplus_channel(shot_numbers=31779, tree_names='KSTAR',
     data_dict = {}
     for sn in shot_numbers:
         data_dict[sn] = {tree: {} for tree in tree_names}
-        for tree, pn in zip(tree_names, point_names):
+        for tree in tree_dict:
             try:
                 if verbose:
                     print(f"    Opening tree {tree} at shot number {sn}...")
@@ -46,23 +74,24 @@ def read_mdsplus_channel(shot_numbers=31779, tree_names='KSTAR',
             except BaseException:
                 print_exc()
                 return None
-            try:
-                if verbose:
-                    print(f"        Reading signal {pn}")
-                signal = conn.get(add_resample(pn, resample))
-                data = signal.data()
-                units = conn.get(units_of(pn)).data()
-                data_dict[sn][tree][pn] = {'data': data, 'units': units}
-                for ii in range(np.ndim(data)):
-                    try:
-                        dim = conn.get(add_resample(dim_of(pn, ii), resample)).data()
-                        data_dict[sn][tree][pn][f'dim{ii}'] = dim
-                    except BaseException:
-                        print_exc()
-                        pass
-            except BaseException:
-                print_exc()
-                return None
+            for pn in tree_dict[tree]:
+                try:
+                    if verbose:
+                        print(f"        Reading signal {pn}")
+                    signal = conn.get(add_resample(pn, resample))
+                    data = signal.data()
+                    units = conn.get(units_of(pn)).data()
+                    data_dict[sn][tree][pn] = {'data': data, 'units': units}
+                    for ii in range(np.ndim(data)):
+                        try:
+                            dim = conn.get(add_resample(dim_of(pn, ii), resample))
+                            data_dict[sn][tree][pn][f'dim{ii}'] = dim.data()
+                        except BaseException:
+                            print_exc()
+                            pass
+                except BaseException:
+                    print_exc()
+                    return None
     return data_dict
 
 
@@ -109,12 +138,6 @@ def get_args():
                              'point_names, and server. If provided, these arguments '
                              'are ignored.')
     args = parser.parse_args()
-    if args.config is not None:
-        with open(args.config, 'r') as f:
-            config = yaml.safe_load(f)
-        for key in config:
-            if key in args:
-                setattr(args, key, config[key])
     return args
 
 
@@ -125,7 +148,7 @@ if __name__ == '__main__':
                                      point_names=args.point_names,
                                      server=args.server,
                                      resample=args.resample,
-                                     verbose=args.verbose)
+                                     verbose=args.verbose, config=args.config)
     if args.out_filename is not None:
         with h5py.File(args.out_filename, 'w') as f:
             for sn in data_dict:
