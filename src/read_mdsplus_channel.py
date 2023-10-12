@@ -84,14 +84,26 @@ def read_mdsplus_channel(shot_numbers=31779, trees='KSTAR',
                     data_dict[sn][tree][pn] = {'data': data, 'units': units}
                     for ii in range(np.ndim(data)):
                         try:
-                            dim = conn.get(add_resample(dim_of(pn, ii), resample))
-                            data_dict[sn][tree][pn][f'dim{ii}'] = dim.data()
-                        except BaseException:
-                            print_exc()
+                            if resample is None or ii != 0:
+                                dim = conn.get(dim_of(pn, ii)).data()
+                            else:
+                                dim = get_time_array(resample)
+                            data_dict[sn][tree][pn][f'dim{ii}'] = dim
+                        except BaseException as exc:
+                            print("-------------------------------------------------")
+                            print(f"Error in reading dim of {tree}: {pn} in shot "
+                                  + f"number {sn}")
+                            print(exc)
+                            # print_exc()
+                            print("-------------------------------------------------")
                             pass
-                except BaseException:
-                    print_exc()
-                    return None
+                except BaseException as exc:
+                    print("-------------------------------------------------")
+                    print(f"Error in reading {tree}: {pn} in shot number {sn}")
+                    print(exc)
+                    print("-------------------------------------------------")
+                    # print_exc()
+                    pass
     return data_dict
 
 
@@ -106,6 +118,11 @@ def add_resample(pn, resample):
     if isinstance(resample, dict):
         resample = [resample['start'], resample['stop'], resample['increment']]
     return f"resample({pn}, {resample[0]}, {resample[1]}, {resample[2]})"
+
+def get_time_array(resample):
+    if isinstance(resample, dict):
+        resample = [resample['start'], resample['stop'], resample['increment']]
+    return np.arange(resample[0], resample[1] + resample[2]*0.1, resample[2])
 
 
 def dim_of(pn, ii):

@@ -2,7 +2,7 @@ import os
 import tempfile
 import argparse
 import yaml
-import h5py
+from merge_h5 import merge_h5
 
 
 def execute_file_remotely(host, exec_file_path, additional_files=[], return_files=[],
@@ -12,10 +12,10 @@ def execute_file_remotely(host, exec_file_path, additional_files=[], return_file
 
     # tmp_dir = tempfile.mkdtemp()
     os.system(f"ssh {host} 'mkdir -p temp_dir'")
-    os.system(f"scp {exec_file_path} "
-              +f"{host}:temp_dir/{os.path.basename(exec_file_path)}")
-    for file in additional_files:
-        os.system(f"scp {file} {host}:temp_dir/{os.path.basename(file)}")
+    to_copy = ' '.join([exec_file_path] + additional_files)
+    os.system(f"scp {to_copy} {host}:temp_dir/")
+    # for file in additional_files:
+    #     os.system(f"scp {file} {host}:temp_dir/{os.path.basename(file)}")
     os.system(f"ssh {host} 'cd temp_dir && chmod +x {os.path.basename(exec_file_path)}"
               + f" && ./{os.path.basename(exec_file_path)}'")
     for file in return_files:
@@ -28,6 +28,7 @@ def get_mdsplus_channel(shot_numbers=31779, trees='KSTAR',
                         server='203.230.126.231:8005', host='iris', resample=None,
                         verbose=False, config=None):
     add_files = [os.path.join(os.path.dirname(__file__), 'read_mdsplus_channel.py')]
+
     if config is None:
         if isinstance(shot_numbers, int):
             shot_numbers = [shot_numbers]
@@ -44,21 +45,15 @@ def get_mdsplus_channel(shot_numbers=31779, trees='KSTAR',
             if isinstance(resample, dict):
                 resample = [resample['start'], resample['stop'], resample['increment']]
             rs = f'-r " {resample[0]}" " {resample[1]}" " {resample[2]}"'
+        cs = f"-n {sn} -t {tn} -p {nn} -s {server} {rs}"
         if verbose:
             print(f"Reading MDSplus channel {nn} from tree {tn} at shot number {sn} "
                 + f"from server {server} and resampling as {resample}...")
             vs = '-v'
         else:
             vs = ''
-
-        # Create a temporary file to execute remotely
-        with tempfile.NamedTemporaryFile(mode="w", delete=False) as tmp_f:
-            tmp_f.write(f"#!/bin/bash \n"
-                        + f"module load python/3 \n"
-                        + f"python3 read_mdsplus_channel.py "
-                        + f"-n {sn} -t {tn} -p {nn} -s {server} "
-                        + f"{rs} -o {out_filename} {vs}")
     else:
+        cs = f"-c {config}"
         with open(config, 'r') as f:
             config_dict = yaml.safe_load(f)
         if 'host' in config_dict:
@@ -72,13 +67,6 @@ def get_mdsplus_channel(shot_numbers=31779, trees='KSTAR',
             vs = '-v'
         else:
             vs = ''
-
-        # Create a temporary file to execute remotely
-        with tempfile.NamedTemporaryFile(mode="w", delete=False) as tmp_f:
-            tmp_f.write(f"#!/bin/bash \n"
-                        + f"module load python/3 \n"
-                        + f"python3 read_mdsplus_channel.py -c {config} "
-                        + f"-o {out_filename} {vs}")
         add_files.append(config)
     
     require_merge = False
@@ -86,7 +74,16 @@ def get_mdsplus_channel(shot_numbers=31779, trees='KSTAR',
         if verbose:
             print(f"File {out_filename} already exists. Will merge with new data.")
         require_merge = True
-        os.rename(out_filename, out_filename+'.old')
+        keep_filename = out_filename
+        out_filename += '.new'
+
+    # Create a temporary file to execute remotely
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as tmp_f:
+        tmp_f.write(f"#!/bin/bash \n"
+                    + f"module load python/3 \n"
+                    + f"python3 read_mdsplus_channel.py {cs} "
+                    + f"-o {out_filename} {vs}")
+
 
     # Execute the temporary file remotely
     execute_file_remotely(host, tmp_f.name, additional_files=add_files,
@@ -94,21 +91,9 @@ def get_mdsplus_channel(shot_numbers=31779, trees='KSTAR',
     
     if require_merge:
         if verbose:
-            print(f"Merging {out_filename} with {out_filename+'.old'}")
-        with h5py.File(out_filename, 'a') as f:
-            with h5py.File(out_filename+'.old', 'r') as f_old:
-                for sn in f_old:
-                    if sn in f:
-                        for tree in f_old[sn]:
-                            if tree in f[sn]:
-                                for pn in f_old[sn][tree]:
-                                    if pn not in f[sn][tree]:
-                                        f[sn][tree][pn] = f_old[sn][tree][pn]
-                            else:
-                                f[sn][tree] = f_old[sn][tree]
-                    else:
-                        f[sn] = f_old[sn]
-        os.remove(out_filename+'.old')
+            print(f"Merging {out_filename} with {keep_filename}")
+        merge_h5(out_filename, keep_filename)
+        os.remove(out_filename)
 
 
     # Delete the temporary file
