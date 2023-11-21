@@ -175,9 +175,9 @@ if __name__ == '__main__':
                     for pn in data_dict[sn][tree]:
                         f[str(sn)][tree].create_group(pn)
                         for key in data_dict[sn][tree][pn]:
-                            if key != 'units':
+                            if isinstance(data_dict[sn][tree][pn][key], np.str_):
+                                f[str(sn)][tree][pn].attrs[key] = \
+                                            data_dict[sn][tree][pn][key].__repr__()
+                            else:
                                 f[str(sn)][tree][pn].create_dataset(key,
                                         data=data_dict[sn][tree][pn][key])
-                            else:
-                                f[str(sn)][tree][pn].attrs[key] = \
-                                                            data_dict[sn][tree][pn][key]
