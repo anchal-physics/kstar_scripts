@@ -80,8 +80,8 @@ def get_mdsplus_channel(shot_numbers=31779, trees='KSTAR',
     # Create a temporary file to execute remotely
     with tempfile.NamedTemporaryFile(mode="w", delete=False) as tmp_f:
         tmp_f.write(f"#!/bin/bash \n"
-                    + f"module load python/3 \n"
-                    + f"python3 read_mdsplus_channel.py {cs} "
+                    # + f"module load python/3 \n"
+                    + f"python read_mdsplus_channel.py {cs} "
                     + f"-o {out_filename} {vs}")
 
 
@@ -109,8 +109,8 @@ def get_args():
     parser.add_argument('-s', '--server', default='203.230.126.231:8005',
                         help='Server address. Default if KSTAR open server '
                              '203.230.126.231:8005')
-    parser.add_argument('-i', '--host', default='iris.gat.com',
-                        help='IP address of remote server. Default is iris')
+    parser.add_argument('-i', '--host', default='omega.gat.com',
+                        help='IP address of remote server. Default is omega')
     parser.add_argument('-r', '--resample', nargs='+', type=float, default=None,
                         help='Resample signal(s) by providing a list of start, stop, '
                              'and increment values. For negative value, enclose them '
