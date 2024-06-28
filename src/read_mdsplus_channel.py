@@ -78,7 +78,10 @@ def read_mdsplus_channel(shot_numbers=31779, trees='KSTAR',
                 try:
                     if verbose:
                         print(f"        Reading signal {pn}")
-                    signal = conn.get(add_resample(pn, resample))
+                    if pn.startswith("PTDATA"):
+                        signal = conn.get(add_resample(pn[:-1] + f", {sn})", resample))
+                    else:
+                        signal = conn.get(add_resample(pn, resample))
                     data = signal.data()
                     units = conn.get(units_of(pn)).data()
                     data_dict[sn][tree][pn] = {'data': data, 'units': units}
@@ -108,7 +111,7 @@ def read_mdsplus_channel(shot_numbers=31779, trees='KSTAR',
 
 
 def add_slash(s):
-    if s.startswith("\\"):
+    if s.startswith("\\") or s.startswith("PTDATA"):
         return s
     ss = "\\" + s
     return r'' + ss.encode('unicode_escape').decode('utf-8')[1:]
@@ -137,7 +140,7 @@ def units_of(pn):
 
 def get_args():
     parser = argparse.ArgumentParser(description='Read MDSplus channel')
-    parser.add_argument('-n', '--shot_numbers', type=int, help='Shot number(s)')
+    parser.add_argument('-n', '--shot_numbers', type=int, nargs='+', help='Shot number(s)')
     parser.add_argument('-t', '--trees', nargs='+', help='Tree name(s)')
     parser.add_argument('-p', '--point_names', nargs='+', help='Point name(s)')
     parser.add_argument('-s', '--server', default='203.230.126.231:8005',
