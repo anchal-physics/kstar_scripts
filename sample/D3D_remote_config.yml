@@ -1,0 +1,15 @@
+shot_numbers:
+  - 199346
+  - 199347
+  - 199348
+trees:
+  D3D: 
+    - PTDATA("IP")      # To add PTDATA pointnames, wrap it in PTDATA("")
+    - PTDATA("PNBI")    # PTDATA does not belong to a tree but will be saved inside the calling tree in hdf5
+    - PTDATA("PECH")
+    - TOP.NEUTRALS.GASFLOW.GASD.FLOW
+    - TOP.NEUTRALS.GASFLOW.GASD.FLOW.LABEL
+host: omega.gat.com
+out_filename: density.h5
+server: atlas.gat.com
+verbose: true

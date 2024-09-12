@@ -1,8 +1,29 @@
-shot_numbers: 31779
-trees:
-  KSTAR: EP53:FOO # Note that \ is not required.
-host: iris.gat.com
-resample: [-0.1, 20, 0.1]
+shot_numbers: # Multiple shot numbers
+  - 31785
+  - 31786
+  - 31787
+trees: # Different trees can be listed like this
+  KSTAR:
+    # Ion saturation current, center of divertor
+    - EP47:FOO # Note that \ is not required.
+    - EP48:FOO
+    - EP49:FOO
+    - EP50:FOO
+    - EP51:FOO
+    - EP52:FOO
+    - EP53:FOO
+    - EP54:FOO
+    - EP55:FOO
+    - EP56:FOO
+    - NE_TCI01 # Line average density from Two-Color Interferometer
+  EFIT01:
+    - RVSOUT # Outer strike point R coordinate
+    - ZVSOUT # Outer strike point Z coordinate
+  PCS_KSTAR:
+    - DVSAISAT # Attached ion saturation current model
+    - DVSAISATF # Attached ion saturation current model (low-pass filtered)
+host: omega.gat.com
+resample: [-0.1, 20, 0.1] # Optional but reduces the amount of data handled
 out_filename: test.h5
 server: 203.230.126.231:8005
 verbose: true
