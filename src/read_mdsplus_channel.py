@@ -51,10 +51,11 @@ def read_mdsplus_channel(shot_numbers=31779, trees='KSTAR',
     elif isinstance(trees, dict):
         tree_dict = {tree: [] for tree in trees}
         for tree in trees:
-            if isinstance(trees[tree], str):
-                tree_dict[tree] = [add_slash(trees[tree])]
-            else:
-                tree_dict[tree] = [add_slash(pn) for pn in trees[tree]]    
+            if tree != "PTDATA":
+                if isinstance(trees[tree], str):
+                    tree_dict[tree] = [add_slash(trees[tree])]
+                else:
+                    tree_dict[tree] = [add_slash(pn) for pn in trees[tree]]    
     
     try:
         conn = MDSplus.Connection(server)
@@ -67,16 +68,20 @@ def read_mdsplus_channel(shot_numbers=31779, trees='KSTAR',
     for sn in shot_numbers:
         data_dict[sn] = {tree: {} for tree in tree_dict}
         for tree in tree_dict:
-            try:
-                if verbose:
-                    print(f"    Opening tree {tree} at shot number {sn}...")
-                conn.openTree(tree, sn)
-            except BaseException:
-                print_exc()
-                return None
+            if tree != "PTDATA":
+                try:
+                    if verbose:
+                        print(f"    Opening tree {tree} at shot number {sn}...")
+                    conn.openTree(tree, sn)
+                except BaseException:
+                    print_exc()
+                    return None
             for pn in tree_dict[tree]:
                 try:
                     if verbose:
+                        print(f"        Reading signal {pn}")
+                    if tree == "PTDATA":
+                        pn = 'PTDATA("' + pn + '")'
                         print(f"        Reading signal {pn}")
                     if pn.startswith("PTDATA"):
                         signal = conn.get(add_resample(pn[:-1] + f", {sn})", resample))
