@@ -7,6 +7,15 @@ import os
 import h5py
 import yaml
 
+def check_red(sn, tree, pn, red_dict):
+    sns = str(sn)
+    if sns in red_dict:
+        if tree in red_dict[sns]:
+            for red_pn in red_dict[sns][tree]:
+                if add_slash(red_pn) == pn:
+                    # print(f"Skipping {tree}: {pn} on shot {sns}")
+                    return True
+
 
 """
 read_mdsplus_channel(shot_numbers=31779, trees='KSTAR',
@@ -17,7 +26,7 @@ Mostly copied from connection_test.py by D. Eldon
 """
 def read_mdsplus_channel(shot_numbers=31779, trees='KSTAR',
                          point_names='EP53:FOO', server='203.230.126.231:8005',
-                         resample=None, verbose=False, config=None):
+                         resample=None, verbose=False, config=None, red_config=None):
     if config is not None:
         with open(config, 'r') as f:
             config = yaml.safe_load(f)
@@ -56,7 +65,11 @@ def read_mdsplus_channel(shot_numbers=31779, trees='KSTAR',
                     tree_dict[tree] = [add_slash(trees[tree])]
                 else:
                     tree_dict[tree] = [add_slash(pn) for pn in trees[tree]]    
-    
+    if red_config is not None:
+        with open(red_config, 'r') as f:
+            red_config = yaml.safe_load(f)
+    else:
+        red_config = {}
     try:
         conn = MDSplus.Connection(server)
         if verbose:
@@ -77,6 +90,8 @@ def read_mdsplus_channel(shot_numbers=31779, trees='KSTAR',
                     print_exc()
                     return None
             for pn in tree_dict[tree]:
+                if check_red(sn, tree, pn, red_config):
+                    continue
                 try:
                     if verbose:
                         print(f"        Reading signal {pn}")
@@ -164,6 +179,9 @@ def get_args():
                         help='Configuration file containing shot_numbers, trees, '
                              'point_names, and server. If provided, these arguments '
                              'are ignored.')
+    parser.add_argument('-d', '--red_config', default=None, type=str,
+                        help='Yaml file containing shot_numbers, trees, '
+                             'point_names to not read.')
     args = parser.parse_args()
     return args
 
@@ -175,7 +193,8 @@ if __name__ == '__main__':
                                      point_names=args.point_names,
                                      server=args.server,
                                      resample=args.resample,
-                                     verbose=args.verbose, config=args.config)
+                                     verbose=args.verbose, config=args.config,
+                                     red_config=args.red_config)
     if args.out_filename is not None:
         with h5py.File(args.out_filename, 'w') as f:
             for sn in data_dict:

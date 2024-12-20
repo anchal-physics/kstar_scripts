@@ -3,6 +3,7 @@ import tempfile
 import argparse
 import yaml
 from merge_h5 import merge_h5
+import h5py
 
 
 def execute_file_remotely(host, exec_file_path, additional_files=[], return_files=[],
@@ -23,10 +24,19 @@ def execute_file_remotely(host, exec_file_path, additional_files=[], return_file
     os.system(f"ssh {host} 'rm -rf temp_dir'")
 
 
+def check_exists(h5, shot_number, tree, point_name):
+    if shot_number in h5:
+        if tree in h5[shot_number]:
+            pns = '\\' + point_name
+            if pns in h5[shot_number][tree]:
+                if 'data' in h5[shot_number][tree][pns]:
+                    return True
+
+
 def get_mdsplus_channel(shot_numbers=31779, trees='KSTAR',
                         point_names='EP53:FOO', out_filename='MDSplus_data.h5',
                         server='203.230.126.231:8005', host='iris', resample=None,
-                        verbose=False, config=None):
+                        verbose=False, config=None, update_cache=False):
     add_files = [os.path.join(os.path.dirname(__file__), 'read_mdsplus_channel.py')]
 
     if config is None:
@@ -68,6 +78,29 @@ def get_mdsplus_channel(shot_numbers=31779, trees='KSTAR',
         else:
             vs = ''
         add_files.append(config)
+        if update_cache:
+            ds = ''
+        else:
+            if os.path.exists(out_filename):
+                red_dict = {}
+                with h5py.File(out_filename, 'r') as h5:
+                    for sn in config_dict['shot_numbers']:
+                        sns = str(sn)
+                        red_dict[sns] = {}
+                        for tree in config_dict['trees']:
+                            red_dict[sns][tree] = []
+                            for pn in config_dict['trees'][tree]:
+                                if check_exists(h5, sns, tree, pn):
+                                    red_dict[str(sn)][tree] += [pn]
+                with open('red_config.yml', "w") as yaml_file:
+                    dump = yaml.dump(red_dict, default_flow_style = False, allow_unicode = True, encoding = None)
+                    yaml_file.write(dump)
+            add_files.append('red_config.yml')
+            if os.path.exists('red_config.yml'):
+                ds = f"-d red_config.yml"
+            else:
+                ds = ''
+
     
     require_merge = False
     if os.path.exists(out_filename):
@@ -82,12 +115,21 @@ def get_mdsplus_channel(shot_numbers=31779, trees='KSTAR',
         tmp_f.write(f"#!/bin/bash \n"
                     # + f"module load python/3 \n"
                     + f"python read_mdsplus_channel.py {cs} "
-                    + f"-o {out_filename} {vs}")
+                    + f"-o {out_filename} {vs} {ds}")
 
 
     # Execute the temporary file remotely
     execute_file_remotely(host, tmp_f.name, additional_files=add_files,
                           return_files=[out_filename], verbose=verbose)
+    
+    # Clean up point names whose data was not read
+    with h5py.File(out_filename, 'r+') as h5:
+        for shot in h5:
+            for tree in h5[shot]:
+                for pn in h5[shot][tree]:
+                    if 'data' not in h5[shot][tree][pn]:
+                        del h5[shot][tree][pn]
+                        continue
     
     if require_merge:
         if verbose:
@@ -98,6 +140,8 @@ def get_mdsplus_channel(shot_numbers=31779, trees='KSTAR',
 
     # Delete the temporary file
     os.remove(tmp_f.name)
+    if os.path.exists('red_config.yml'):
+        os.remove("red_config.yml")
 
 
 def get_args():
